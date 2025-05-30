@@ -7,9 +7,11 @@ import org.elyashevich.consumer.api.mapper.CategoryMapper;
 import org.elyashevich.consumer.service.CategoryService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -51,5 +53,23 @@ public class CategoryController {
         return ResponseEntity.created(
                 uriBuilder.replacePath("/api/v1/categories/{name}").build(Map.of("name", category.getName()))
         ).body(categoryMapper.toDto(category));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<CategoryResponseDto> update(
+            @PathVariable("id") Long id,
+            @Validated @RequestBody CategoryCreateDto dto,
+            UriComponentsBuilder uriBuilder
+    ) {
+        var category = this.categoryService.update(id, categoryMapper.toEntity(dto));
+        return ResponseEntity.created(
+                uriBuilder.replacePath("/api/v1/categories/{name}").build(Map.of("name", category.getName()))
+        ).body(categoryMapper.toDto(category));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
+        this.categoryService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }
