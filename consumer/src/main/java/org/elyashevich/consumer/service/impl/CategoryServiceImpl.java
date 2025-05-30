@@ -19,6 +19,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     public static final String CATEGORY_WITH_NAME_NOT_FOUND_TEMPLATE = "Category with name: '%s' not found";
     public static final String CATEGORY_WITH_NAME_ALREADY_EXISTS_TEMPLATE = "Category with name: '%s' already exists";
+    public static final String CATEGORY_WITH_ID_WAS_NOT_FOUND_TEMPLATE = "Category with id: '%d' was not found";
     private final CategoryRepository categoryRepository;
 
     @Override
@@ -52,15 +53,65 @@ public class CategoryServiceImpl implements CategoryService {
     public Category save(Category category) {
         log.debug("Attempting to save category with name {}", category.getName());
 
-        if (this.categoryRepository.existsByName(category.getName())) {
-            var message = CATEGORY_WITH_NAME_ALREADY_EXISTS_TEMPLATE.formatted(category.getName());
-            log.info(message);
-            throw new ResourceAlreadyExistException(message);
-        }
+        this.checkIfCategoryExistsByName(category.getName());
 
         var newCategory = this.categoryRepository.save(category);
 
         log.info("Saved category with name {}", newCategory.getName());
         return newCategory;
+    }
+
+    @Override
+    @Transactional
+    public Category update(Long id, Category category) {
+        log.debug("Attempting update category with id: {}", id);
+
+        this.checkIfCategoryExistsByName(category.getName());
+
+        var oldCategory = this.findById(id);
+
+        oldCategory.setDescription(category.getDescription());
+        oldCategory.setName(category.getName());
+
+        var updatedCategory = this.categoryRepository.save(oldCategory);
+
+        log.info("Category updated: {}", updatedCategory);
+        return updatedCategory;
+    }
+
+    @Override
+    public Category findById(Long id) {
+        log.debug("Attempting find category with id: {}", id);
+
+        var category = this.categoryRepository.findById(id).orElseThrow(
+                () -> {
+                    var message = CATEGORY_WITH_ID_WAS_NOT_FOUND_TEMPLATE.formatted(id);
+                    log.info(message);
+                    return new ResourceNotFoundException(message);
+                }
+        );
+
+        log.info("Category found: {}", category);
+        return category;
+    }
+
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        log.debug("Attempting delete category with id: {}", id);
+
+        var category = this.findById(id);
+
+        this.categoryRepository.delete(category);
+
+        log.info("Category with id: {} deleted", id);
+    }
+
+    protected void checkIfCategoryExistsByName(String name) {
+        if (this.categoryRepository.existsByName(name)) {
+            var message = CATEGORY_WITH_NAME_ALREADY_EXISTS_TEMPLATE.formatted(name);
+            log.info(message);
+            throw new ResourceAlreadyExistException(message);
+        }
     }
 }
