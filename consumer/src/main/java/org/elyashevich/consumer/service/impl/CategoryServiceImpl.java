@@ -107,7 +107,7 @@ public class CategoryServiceImpl implements CategoryService {
         log.info("Category with id: {} deleted", id);
     }
 
-    protected void checkIfCategoryExistsByName(String name) {
+    private void checkIfCategoryExistsByName(String name) {
         if (this.categoryRepository.existsByName(name)) {
             var message = CATEGORY_WITH_NAME_ALREADY_EXISTS_TEMPLATE.formatted(name);
             log.info(message);
