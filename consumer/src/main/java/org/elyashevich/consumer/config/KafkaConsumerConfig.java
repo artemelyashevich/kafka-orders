@@ -1,6 +1,6 @@
 package org.elyashevich.consumer.config;
 
-import org.elyashevich.consumer.model.Order;
+import org.elyashevich.consumer.domain.entity.Order;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -24,7 +24,7 @@ public class KafkaConsumerConfig {
     ) {
         Map<String, Object> props = new HashMap<>();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "order-group");
 
         JsonDeserializer<Order> jsonDeserializer =
                 new JsonDeserializer<>(Order.class, objectMapper);

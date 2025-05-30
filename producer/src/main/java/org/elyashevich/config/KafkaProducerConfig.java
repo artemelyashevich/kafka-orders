@@ -1,9 +1,9 @@
 package org.elyashevich.config;
 
-import org.elyashevich.model.Order;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.elyashevich.model.OrderEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
@@ -18,11 +18,11 @@ import java.util.Map;
 public class KafkaProducerConfig {
 
     @Bean
-    public ProducerFactory<String, Order> producerFactory(ObjectMapper objectMapper) {
+    public ProducerFactory<String, OrderEvent> producerFactory(ObjectMapper objectMapper) {
         Map<String, Object> configProperties = new HashMap<>();
         configProperties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
 
-        JsonSerializer<Order> serializer = new JsonSerializer<>(objectMapper);
+        JsonSerializer<OrderEvent> serializer = new JsonSerializer<>(objectMapper);
         serializer.setAddTypeInfo(false);
 
         return new DefaultKafkaProducerFactory<>(
@@ -33,7 +33,7 @@ public class KafkaProducerConfig {
     }
 
     @Bean
-    public KafkaTemplate<String, Order> kafkaTemplate(ProducerFactory<String, Order> producerFactory) {
+    public KafkaTemplate<String, OrderEvent> kafkaTemplate(ProducerFactory<String, OrderEvent> producerFactory) {
         return new KafkaTemplate<>(producerFactory);
     }
 }

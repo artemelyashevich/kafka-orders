@@ -1,6 +1,6 @@
 package org.elyashevich.controller;
 
-import org.elyashevich.model.Order;
+import org.elyashevich.model.OrderEvent;
 import org.elyashevich.producer.KafkaOrderProducer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,14 +20,8 @@ public class OrderController {
     private final KafkaOrderProducer producer;
 
     @PostMapping
-    public void createOrder(@RequestBody Order order) {
-        log.info("Create order called: order={}", order);
-
-        var orderToSave = new Order(
-                UUID.randomUUID().toString(),
-                order.getProductId()
-        );
-
-        producer.sendOrderToKafka(orderToSave);
+    public void createOrder(@RequestBody OrderEvent event) {
+        log.info("Create order called: order={}", event);
+        producer.sendOrderToKafka(event);
     }
 }
