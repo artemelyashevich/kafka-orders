@@ -24,13 +24,13 @@ import java.util.Map;
 public class CategoryController {
 
     private final CategoryService categoryService;
-    private final CategoryMapper categoryMapper = CategoryMapper.INSTANCE;
+    private static final CategoryMapper categoryMapper = CategoryMapper.INSTANCE;
 
     @GetMapping
     public ResponseEntity<List<CategoryResponseDto>> findAll() {
         var categories = this.categoryService.findAll();
         return ResponseEntity.ok(
-                this.categoryMapper.toDtoList(categories)
+                categoryMapper.toDtoList(categories)
         );
     }
 
@@ -38,7 +38,7 @@ public class CategoryController {
     public ResponseEntity<CategoryResponseDto> findByName(@PathVariable String name) {
         var category = this.categoryService.findByName(name);
         return ResponseEntity.ok(
-                this.categoryMapper.toDto(category)
+                categoryMapper.toDto(category)
         );
     }
 
@@ -47,9 +47,9 @@ public class CategoryController {
             @Validated @RequestBody CategoryCreateDto dto,
             UriComponentsBuilder uriBuilder
     ) {
-        var category = this.categoryService.save(this.categoryMapper.toEntity(dto));
+        var category = this.categoryService.save(categoryMapper.toEntity(dto));
         return ResponseEntity.created(
                 uriBuilder.replacePath("/api/v1/categories/{name}").build(Map.of("name", category.getName()))
-        ).body(this.categoryMapper.toDto(category));
+        ).body(categoryMapper.toDto(category));
     }
 }

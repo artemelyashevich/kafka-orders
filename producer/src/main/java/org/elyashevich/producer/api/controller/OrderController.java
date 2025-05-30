@@ -1,9 +1,9 @@
 package org.elyashevich.producer.api.controller;
 
+import lombok.RequiredArgsConstructor;
 import org.elyashevich.producer.api.dto.order.OrderCreateRequest;
 import org.elyashevich.producer.api.mapper.OrderEventMapper;
 import org.elyashevich.producer.producer.KafkaOrderProducer;
-import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,10 +15,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class OrderController {
 
     private final KafkaOrderProducer producer;
-    private final OrderEventMapper orderEventMapper = OrderEventMapper.INSTANCE;
+    private static final OrderEventMapper orderEventMapper = OrderEventMapper.INSTANCE;
 
     @PostMapping
     public void handleOrder(@RequestBody OrderCreateRequest event) {
-        producer.sendOrderToKafka(this.orderEventMapper.toOrderEvent(event));
+        producer.sendOrderToKafka(orderEventMapper.toOrderEvent(event));
     }
 }

@@ -1,10 +1,8 @@
 package org.elyashevich.consumer.config;
 
-import org.elyashevich.consumer.api.dto.order.OrderEvent;
-import org.elyashevich.consumer.domain.entity.Order;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.elyashevich.consumer.api.dto.order.OrderEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;

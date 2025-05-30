@@ -1,18 +1,16 @@
 package org.elyashevich.consumer.api.kafka.consumer;
 
-import org.elyashevich.consumer.api.dto.order.OrderEvent;
-import org.elyashevich.consumer.api.mapper.OrderMapper;
-import org.elyashevich.consumer.domain.entity.Category;
-import org.elyashevich.consumer.metrics.GrafanaKafkaConsumerMetrics;
 import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.elyashevich.consumer.api.dto.order.OrderEvent;
+import org.elyashevich.consumer.api.mapper.OrderMapper;
+import org.elyashevich.consumer.domain.entity.Category;
+import org.elyashevich.consumer.metrics.GrafanaKafkaConsumerMetrics;
 import org.elyashevich.consumer.service.OrderService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Service;
 
 import java.util.Random;
@@ -32,16 +30,16 @@ public class OrderKafkaConsumer {
     private int maxProcessingDelayMs;
 
     private final OrderService orderService;
-    private final OrderMapper orderMapper = OrderMapper.INSTANCE;
+    private static final OrderMapper orderMapper = OrderMapper.INSTANCE;
 
     @KafkaListener(topics = "orders", concurrency = "4", groupId = "order-group")
     public void consumeOrder(
-            ConsumerRecord<String, OrderEvent> record
+            ConsumerRecord<String, OrderEvent> orderRecord
     ) throws InterruptedException {
         Timer.Sample timer = metrics.startTimer();
         simulateProcessingDelay();
-        var event = record.value();
-        var order = this.orderMapper.toEntity(event.getOrder());
+        var event = orderRecord.value();
+        var order = orderMapper.toEntity(event.getOrder());
         order.setCategory(Category.builder().name(event.getOrder().getCategoryName()).build());
 
         switch (event.getEventType()) {
@@ -59,7 +57,7 @@ public class OrderKafkaConsumer {
 
         log.info("Successfully processed order event: {}", event.getEventId());
 
-        metrics.recordSuccess(timer, record.topic(), record.serializedValueSize());
+        metrics.recordSuccess(timer, orderRecord.topic(), orderRecord.serializedValueSize());
     }
 
     private void simulateProcessingDelay() throws InterruptedException {
