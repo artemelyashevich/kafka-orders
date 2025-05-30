@@ -2,7 +2,6 @@ package org.elyashevich.consumer.domain.entity;
 
 import jakarta.persistence.*;
 import lombok.Builder;
-import lombok.Data;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
@@ -28,13 +27,4 @@ public class Category {
     private String name;
 
     private String description;
-
-    @Transient
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<Order> orders = new ArrayList<>();
-
-    public void addOrder(Order order) {
-        orders.add(order);
-        order.setCategory(this);
-    }
 }

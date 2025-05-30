@@ -1,7 +1,7 @@
-package org.elyashevich.model;
+package org.elyashevich.producer.model;
 
 import lombok.Data;
-import java.math.BigDecimal;
+
 import java.time.LocalDateTime;
 
 @Data

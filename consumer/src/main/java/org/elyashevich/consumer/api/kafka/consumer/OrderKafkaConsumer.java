@@ -32,38 +32,32 @@ public class OrderKafkaConsumer {
     private int maxProcessingDelayMs;
 
     private final OrderService orderService;
-    private final OrderMapper orderMapper;
+    private final OrderMapper orderMapper = OrderMapper.INSTANCE;
 
     @KafkaListener(topics = "orders", concurrency = "4", groupId = "order-group")
     public void consumeOrder(
-            @Payload OrderEvent orderEvent,
-            ConsumerRecord<String, OrderEvent> record,
-            Acknowledgment acknowledgment
+            ConsumerRecord<String, OrderEvent> record
     ) throws InterruptedException {
         Timer.Sample timer = metrics.startTimer();
         simulateProcessingDelay();
+        var event = record.value();
+        var order = this.orderMapper.toEntity(event.getOrder());
+        order.setCategory(Category.builder().name(event.getOrder().getCategoryName()).build());
 
-        log.info("Received Order Event: key={}, partition={}, offset={}, event={}",
-                record.key(), record.partition(), record.offset(), orderEvent);
-
-        var order = this.orderMapper.toEntity(orderEvent.getOrder());
-        order.setCategory(Category.builder().name(orderEvent.getOrder().getCategoryName()).build());
-
-        switch (orderEvent.getEventType()) {
+        switch (event.getEventType()) {
             case ORDER_CREATED -> this.orderService.create(order);
             case ORDER_UPDATED -> {
-                order.setId(orderEvent.getOrder().getOrderId());
+                order.setId(event.getOrder().getOrderId());
                 this.orderService.update(order);
             }
             case ORDER_CANCELLED -> {
-                order.setId(orderEvent.getOrder().getOrderId());
+                order.setId(event.getOrder().getOrderId());
                 this.orderService.cancel(order);
             }
-            default -> log.warn("Unknown event type: {}", orderEvent.getEventType());
+            default -> log.warn("Unknown event type: {}", event.getEventType());
         }
 
-        acknowledgment.acknowledge();
-        log.info("Successfully processed order event: {}", orderEvent.getEventId());
+        log.info("Successfully processed order event: {}", event.getEventId());
 
         metrics.recordSuccess(timer, record.topic(), record.serializedValueSize());
     }

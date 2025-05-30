@@ -1,4 +1,4 @@
-package org.elyashevich.model;
+package org.elyashevich.producer.model;
 
 import lombok.Data;
 import java.math.BigDecimal;
@@ -7,7 +7,6 @@ import java.math.BigDecimal;
 public class OrderData {
     private Long orderId;
     private String productName;
-    private Long categoryId;
     private String categoryName;
     private BigDecimal price;
     private Integer quantity;

@@ -1,8 +1,8 @@
-package org.elyashevich.producer;
+package org.elyashevich.producer.producer;
 
-import org.elyashevich.metrics.KafkaMetrics;
+import org.elyashevich.producer.metrics.KafkaMetrics;
 import io.micrometer.core.instrument.Timer;
-import org.elyashevich.model.OrderEvent;
+import org.elyashevich.producer.model.OrderEvent;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +20,7 @@ public class KafkaOrderProducer {
         Timer.Sample sample = Timer.start();
         try {
             kafkaTemplate.send("orders", order.getEventId(), order);
+            log.info("Sent order event: {}", order.getEventId());
             metrics.incrementMessageCount();
         } finally {
             sample.stop(metrics.getProcessingTimer());

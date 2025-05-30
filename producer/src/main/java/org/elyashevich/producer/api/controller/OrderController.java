@@ -1,27 +1,24 @@
-package org.elyashevich.controller;
+package org.elyashevich.producer.api.controller;
 
-import org.elyashevich.model.OrderEvent;
-import org.elyashevich.producer.KafkaOrderProducer;
+import org.elyashevich.producer.api.dto.order.OrderCreateRequest;
+import org.elyashevich.producer.api.mapper.OrderEventMapper;
+import org.elyashevich.producer.producer.KafkaOrderProducer;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.UUID;
-
-@Slf4j
 @RestController
 @RequestMapping("/api/v1/orders")
 @RequiredArgsConstructor
 public class OrderController {
 
     private final KafkaOrderProducer producer;
+    private final OrderEventMapper orderEventMapper = OrderEventMapper.INSTANCE;
 
     @PostMapping
-    public void createOrder(@RequestBody OrderEvent event) {
-        log.info("Create order called: order={}", event);
-        producer.sendOrderToKafka(event);
+    public void handleOrder(@RequestBody OrderCreateRequest event) {
+        producer.sendOrderToKafka(this.orderEventMapper.toOrderEvent(event));
     }
 }

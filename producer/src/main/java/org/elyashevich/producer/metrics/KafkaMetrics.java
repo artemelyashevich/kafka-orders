@@ -1,4 +1,4 @@
-package org.elyashevich.metrics;
+package org.elyashevich.producer.metrics;
 
 import io.micrometer.core.instrument.*;
 import org.springframework.stereotype.Component;
