@@ -8,6 +8,9 @@ import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.concurrent.ThreadLocalRandom;
+
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -19,7 +22,11 @@ public class KafkaOrderProducer {
     public void sendOrderToKafka(OrderEvent order) {
         Timer.Sample sample = Timer.start();
         try {
-            kafkaTemplate.send("orders", order.getEventId(), order);
+            kafkaTemplate.send(
+                    "orders",
+                    String.valueOf(ThreadLocalRandom.current().nextInt(1, 11)),
+                    order
+            );
             log.info("Sent order event: {}", order.getEventId());
             metrics.incrementMessageCount();
         } finally {

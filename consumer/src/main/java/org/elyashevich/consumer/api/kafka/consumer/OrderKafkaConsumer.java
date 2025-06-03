@@ -8,78 +8,75 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.elyashevich.consumer.api.dto.order.OrderEvent;
 import org.elyashevich.consumer.api.mapper.OrderMapper;
 import org.elyashevich.consumer.domain.entity.Category;
+import org.elyashevich.consumer.exception.BusinessException;
 import org.elyashevich.consumer.metrics.GrafanaKafkaConsumerMetrics;
 import org.elyashevich.consumer.service.OrderService;
-import org.springframework.beans.factory.annotation.Value;
+import org.elyashevich.consumer.service.ProducerStatsService;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderKafkaConsumer {
 
     private final GrafanaKafkaConsumerMetrics metrics;
-    private static final Random RANDOM = new Random();
-
-    @Value("${kafka.consumer.simulate.processing.delay:true}")
-    private boolean simulateProcessingDelay;
-
-    @Value("${kafka.consumer.max.processing.delay.ms:100}")
-    private int maxProcessingDelayMs;
-
     private final OrderService orderService;
+    private final ProducerStatsService producerStatsService;
+
     private static final OrderMapper orderMapper = OrderMapper.INSTANCE;
+
     private final ExecutorService processingExecutor = Executors.newFixedThreadPool(4);
-    private final Map<String, BlockingQueue<OrderEvent>> orderQueues = new ConcurrentHashMap<>();
+    private final Map<Long, BlockingQueue<OrderEvent>> orderQueues = new ConcurrentHashMap<>();
 
     @KafkaListener(topics = "orders", concurrency = "4", groupId = "order-group")
     public void consumeOrder(ConsumerRecord<String, OrderEvent> orderRecord) {
-        Timer.Sample timer = metrics.startTimer();
+        Timer.Sample timer = this.metrics.startTimer();
         try {
+
             var event = orderRecord.value();
 
-            simulateProcessingDelay();
-
-            orderQueues.computeIfAbsent(
-                    event.getOrder().getOrderId().toString(),
+            this.orderQueues.computeIfAbsent(
+                    event.getOrder().getOrderId(),
                     k -> new LinkedBlockingQueue<>()
             ).put(event);
 
-            processingExecutor.submit(() -> processEventsForOrder(event.getOrder().getOrderId().toString()));
+            this.processingExecutor.submit(() -> {
+                this.processEventsForOrder(event.getOrder().getOrderId());
+                this.producerStatsService.recordProducerCall(orderRecord.key(), orderRecord.topic());
+            });
 
-            metrics.recordSuccess(timer, orderRecord.topic(), orderRecord.serializedValueSize());
+            this.metrics.recordSuccess(timer, orderRecord.topic(), orderRecord.serializedValueSize());
             log.info("Successfully queued order event: {}", event.getEventId());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.error("Processing interrupted for order event", e);
-        } catch (Exception e) {
-            log.error("Failed to process order event", e);
-            throw e;
+        } catch (BusinessException e) {
+            log.info("Failed to process order event", e);
         }
     }
 
-    private void processEventsForOrder(String orderId) {
+    private void processEventsForOrder(Long orderId) {
         try {
-            var queue = orderQueues.get(orderId);
+            var queue = this.orderQueues.get(orderId);
             if (queue == null) return;
 
             while (!queue.isEmpty()) {
                 var event = queue.poll();
                 if (event != null) {
-                    processSingleEvent(event);
+                    this.processSingleEvent(event);
                 }
             }
         } finally {
-            orderQueues.remove(orderId);
+            this.orderQueues.remove(orderId);
         }
     }
 
@@ -89,14 +86,14 @@ public class OrderKafkaConsumer {
             order.setCategory(Category.builder().name(event.getOrder().getCategoryName()).build());
 
             switch (event.getEventType()) {
-                case ORDER_CREATED -> orderService.create(order);
+                case ORDER_CREATED -> this.orderService.create(order);
                 case ORDER_UPDATED -> {
                     order.setId(event.getOrder().getOrderId());
-                    orderService.update(order);
+                    this.orderService.update(order);
                 }
                 case ORDER_CANCELLED -> {
                     order.setId(event.getOrder().getOrderId());
-                    orderService.cancel(order);
+                    this.orderService.cancel(order);
                 }
                 default -> log.warn("Unknown event type: {}", event.getEventType());
             }
@@ -112,15 +109,8 @@ public class OrderKafkaConsumer {
         }
     }
 
-    private void simulateProcessingDelay() throws InterruptedException {
-        if (simulateProcessingDelay) {
-            int delay = RANDOM.nextInt(maxProcessingDelayMs + 1);
-            Thread.sleep(delay);
-        }
-    }
-
     @PreDestroy
     public void shutdown() {
-        processingExecutor.shutdownNow();
+        this.processingExecutor.shutdownNow();
     }
 }
