@@ -10,4 +10,5 @@ public record CategoryCreateDto(
 
         @Size(max = 255, message = "Description cannot exceed 255 characters")
         String description
-) {}
+) {
+}

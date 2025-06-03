@@ -20,20 +20,20 @@ public class GrafanaKafkaConsumerMetrics {
 
     public GrafanaKafkaConsumerMetrics(MeterRegistry registry) {
         this.registry = registry;
-        
+
         this.globalProcessingTimer = Timer.builder("kafka.consumer.processing.time.global")
-            .description("Total message processing time")
-            .publishPercentiles(0.5, 0.95, 0.99)
-            .register(registry);
+                .description("Total message processing time")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(registry);
 
         this.totalMessagesCounter = Counter.builder("kafka.consumer.messages.total")
-            .description("Total consumed messages count")
-            .register(registry);
+                .description("Total consumed messages count")
+                .register(registry);
 
         this.messageSizeSummary = DistributionSummary.builder("kafka.consumer.message.size")
-            .description("Message size distribution")
-            .baseUnit("bytes")
-            .register(registry);
+                .description("Message size distribution")
+                .baseUnit("bytes")
+                .register(registry);
     }
 
     public Timer.Sample startTimer() {
@@ -41,22 +41,22 @@ public class GrafanaKafkaConsumerMetrics {
     }
 
     public void recordSuccess(Timer.Sample sample, String topic, long messageSize) {
-        if (sample == null){
+        if (sample == null) {
             return;
         }
-        
+
         sample.stop(getSuccessTimer(topic));
         sample.stop(globalProcessingTimer);
-        
+
         totalMessagesCounter.increment();
         messageSizeSummary.record(messageSize);
     }
 
     private Timer getSuccessTimer(String topic) {
-        return successTimers.computeIfAbsent(topic, t -> 
-            Timer.builder("kafka.consumer.processing.time.success")
-                .tags("topic", t, "status", "success")
-                .publishPercentiles(0.5, 0.95, 0.99)
-                .register(registry));
+        return successTimers.computeIfAbsent(topic, t ->
+                Timer.builder("kafka.consumer.processing.time.success")
+                        .tags("topic", t, "status", "success")
+                        .publishPercentiles(0.5, 0.95, 0.99)
+                        .register(registry));
     }
 }

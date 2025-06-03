@@ -47,6 +47,7 @@ public class OrderServiceImpl implements OrderService {
         existingOrder.setProductName(orderUpdate.getProductName());
         existingOrder.setPrice(orderUpdate.getPrice());
         existingOrder.setQuantity(orderUpdate.getQuantity());
+        existingOrder.setStatus(orderUpdate.getStatus());
 
         if (orderUpdate.getCategory() != null) {
             var category = categoryService.findByName(orderUpdate.getCategory().getName());
