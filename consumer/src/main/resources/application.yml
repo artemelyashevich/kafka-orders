@@ -3,6 +3,9 @@ spring:
     name: consumer
   config:
     import: optional:file:.env[.properties]
+  kafka:
+    listener:
+      default-retry-template: false
   jpa:
     show-sql: true
     hibernate:

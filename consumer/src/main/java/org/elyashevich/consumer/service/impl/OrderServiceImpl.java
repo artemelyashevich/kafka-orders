@@ -25,6 +25,7 @@ public class OrderServiceImpl implements OrderService {
     public Order create(Order order) {
         log.debug("Attempting to create order {}", order);
 
+        order.setId(null);
         var category = categoryService.findByName(order.getCategory().getName());
 
         order.setCategory(category);
