@@ -4,38 +4,40 @@ import lombok.RequiredArgsConstructor;
 import org.elyashevich.consumer.domain.entity.ProducerStats;
 import org.elyashevich.consumer.repository.ProducerStatsRepository;
 import org.elyashevich.consumer.service.ProducerStatsService;
-import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 @RequiredArgsConstructor
 public class ProducerStatsServiceImpl implements ProducerStatsService {
     private final ProducerStatsRepository statsRepository;
 
+    private final ConcurrentMap<String, Object> keyLocks = new ConcurrentHashMap<>();
+
     @Override
     @Transactional
     public void recordProducerCall(String producerId, String topicName) {
-        var now = LocalDateTime.now();
+        String lockKey = producerId + "|" + topicName;
 
-        boolean updated = false;
-        int retryCount = 0;
+        Object lock = keyLocks.compute(lockKey, (k, v) -> v == null ? new Object() : v);
 
-        while (!updated && retryCount < 3) {
-            try {
-                statsRepository.findByProducerIdAndTopicName(producerId, topicName)
-                        .ifPresentOrElse(
-                                stats -> statsRepository.incrementCallCount(producerId, topicName, now),
-                                () -> createNewStats(producerId, topicName, now)
-                        );
-                updated = true;
-            } catch (ObjectOptimisticLockingFailureException e) {
-                retryCount++;
-                if (retryCount >= 3) throw e;
-            }
+        synchronized (lock) {
+            var now = LocalDateTime.now();
+            statsRepository.findByProducerIdAndTopicName(producerId, topicName)
+                    .ifPresentOrElse(
+                            stats -> statsRepository.incrementCallCount(producerId, topicName, now),
+                            () -> createNewStats(producerId, topicName, now)
+                    );
+        }
+
+        if (ThreadLocalRandom.current().nextInt(100) == 0) {
+            keyLocks.entrySet().removeIf(entry -> ThreadLocalRandom.current().nextInt(10) == 0);
         }
     }
 

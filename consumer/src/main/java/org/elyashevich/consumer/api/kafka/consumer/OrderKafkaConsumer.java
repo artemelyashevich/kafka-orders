@@ -55,9 +55,11 @@ public class OrderKafkaConsumer {
             });
 
             this.metrics.recordSuccess(timer, orderRecord.topic(), orderRecord.serializedValueSize());
+
             log.info("Successfully queued order event: {}", event.getEventId());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+
             log.error("Processing interrupted for order event", e);
         } catch (BusinessException e) {
             log.info("Failed to process order event", e);
@@ -100,10 +102,12 @@ public class OrderKafkaConsumer {
 
             log.info("Successfully processed order event: {}", event.getEventId());
         } catch (ObjectOptimisticLockingFailureException e) {
+
             log.warn("Optimistic lock conflict for order {} (event {}). Retrying...",
                     event.getOrder().getOrderId(), event.getEventId());
             throw e;
         } catch (Exception e) {
+
             log.error("Failed to process order event: {}", event.getEventId(), e);
             throw e;
         }
