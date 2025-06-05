@@ -17,68 +17,88 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OrderKafkaConsumer {
+    private static final OrderMapper orderMapper = OrderMapper.INSTANCE;
+    private static final int PROCESSING_THREADS = 4;
+    private static final int MAX_QUEUE_SIZE = 1000;
 
     private final GrafanaKafkaConsumerMetrics metrics;
     private final OrderService orderService;
     private final ProducerStatsService producerStatsService;
 
-    private static final OrderMapper orderMapper = OrderMapper.INSTANCE;
-
-    private final ExecutorService processingExecutor = Executors.newFixedThreadPool(4);
-    private final Map<Long, BlockingQueue<OrderEvent>> orderQueues = new ConcurrentHashMap<>();
+    private final ExecutorService processingExecutor = Executors.newFixedThreadPool(PROCESSING_THREADS);
+    private final Map<Long, Queue<OrderEvent>> orderQueues = new ConcurrentHashMap<>();
 
     @KafkaListener(topics = "orders", concurrency = "4", groupId = "order-group")
     public void consumeOrder(ConsumerRecord<String, OrderEvent> orderRecord) {
-        Timer.Sample timer = this.metrics.startTimer();
+        Timer.Sample timer = metrics.startTimer();
         try {
 
+            producerStatsService.recordProducerCall(orderRecord.key(), orderRecord.topic());
+
             var event = orderRecord.value();
+            var orderId = event.getOrder().getOrderId();
 
-            this.orderQueues.computeIfAbsent(
-                    event.getOrder().getOrderId(),
-                    k -> new LinkedBlockingQueue<>()
-            ).put(event);
+            if (!offerEventToQueue(orderId, event)) {
+                throw new BusinessException("Order queue overflow for order: " + orderId);
+            }
 
-            this.processingExecutor.submit(() -> {
-                this.processEventsForOrder(event.getOrder().getOrderId());
-                this.producerStatsService.recordProducerCall(orderRecord.key(), orderRecord.topic());
-            });
+            processingExecutor.submit(() -> processOrderEvents(orderId));
 
-            this.metrics.recordSuccess(timer, orderRecord.topic(), orderRecord.serializedValueSize());
-
-            log.info("Successfully queued order event: {}", event.getEventId());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-
-            log.error("Processing interrupted for order event", e);
-        } catch (BusinessException e) {
-            log.info("Failed to process order event", e);
+            metrics.recordSuccess(timer, orderRecord.topic(), orderRecord.serializedValueSize());
+            log.debug("Queued order event: {}", event.getEventId());
+        } catch (Exception e) {
+            log.error("Failed to process order event", e);
         }
     }
 
-    private void processEventsForOrder(Long orderId) {
+    private boolean offerEventToQueue(long orderId, OrderEvent event) {
+        var queue = orderQueues.computeIfAbsent(
+                orderId,
+                k -> new LinkedBlockingQueue<>(MAX_QUEUE_SIZE)
+        );
+        return queue.offer(event);
+    }
+
+    private void processOrderEvents(long orderId) {
         try {
-            var queue = this.orderQueues.get(orderId);
+            var queue = orderQueues.get(orderId);
             if (queue == null) return;
 
-            while (!queue.isEmpty()) {
-                var event = queue.poll();
-                if (event != null) {
-                    this.processSingleEvent(event);
-                }
+            OrderEvent event;
+            while ((event = queue.poll()) != null) {
+                processSingleEventWithRetry(event);
             }
         } finally {
-            this.orderQueues.remove(orderId);
+            orderQueues.remove(orderId);
+        }
+    }
+
+    private void processSingleEventWithRetry(OrderEvent event) {
+        var attempt = 0;
+        while (attempt < 3) {
+            try {
+                processSingleEvent(event);
+                return;
+            } catch (ObjectOptimisticLockingFailureException e) {
+                attempt++;
+                if (attempt >= 3) {
+                    log.error("Failed to process order {} after {} attempts (event {})",
+                            event.getOrder().getOrderId(), 3, event.getEventId());
+                    throw e;
+                }
+                waitBeforeRetry(attempt);
+            }
         }
     }
 
@@ -88,33 +108,44 @@ public class OrderKafkaConsumer {
             order.setCategory(Category.builder().name(event.getOrder().getCategoryName()).build());
 
             switch (event.getEventType()) {
-                case ORDER_CREATED -> this.orderService.create(order);
+                case ORDER_CREATED -> orderService.create(order);
                 case ORDER_UPDATED -> {
                     order.setId(event.getOrder().getOrderId());
-                    this.orderService.update(order);
+                    orderService.update(order);
                 }
                 case ORDER_CANCELLED -> {
                     order.setId(event.getOrder().getOrderId());
-                    this.orderService.cancel(order);
+                    orderService.cancel(order);
                 }
                 default -> log.warn("Unknown event type: {}", event.getEventType());
             }
 
-            log.info("Successfully processed order event: {}", event.getEventId());
-        } catch (ObjectOptimisticLockingFailureException e) {
-
-            log.warn("Optimistic lock conflict for order {} (event {}). Retrying...",
-                    event.getOrder().getOrderId(), event.getEventId());
-            throw e;
+            log.debug("Processed order event: {}", event.getEventId());
         } catch (Exception e) {
-
-            log.error("Failed to process order event: {}", event.getEventId(), e);
+            log.error("Error processing order event: {}", event.getEventId(), e);
             throw e;
+        }
+    }
+
+    private void waitBeforeRetry(int attempt) {
+        try {
+            var delay = (long) Math.pow(2, attempt) * 100;
+            Thread.sleep(delay);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
     @PreDestroy
     public void shutdown() {
-        this.processingExecutor.shutdownNow();
+        processingExecutor.shutdown();
+        try {
+            if (!processingExecutor.awaitTermination(30, TimeUnit.SECONDS)) {
+                processingExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            processingExecutor.shutdownNow();
+        }
     }
 }
